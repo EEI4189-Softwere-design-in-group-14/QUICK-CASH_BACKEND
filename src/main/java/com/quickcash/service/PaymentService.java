@@ -25,12 +25,14 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final LoanRepository loanRepository;
     private final UserRepository userRepository;
-
+    private final ReceiptService receiptService;
     public PaymentService(
             PaymentRepository paymentRepository,
             LoanRepository loanRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            ReceiptService receiptService
     ) {
+
         this.paymentRepository =
                 paymentRepository;
 
@@ -39,6 +41,9 @@ public class PaymentService {
 
         this.userRepository =
                 userRepository;
+
+        this.receiptService =
+                receiptService;
     }
 
     @Transactional
@@ -64,6 +69,10 @@ public class PaymentService {
                         );
 
         if (existing.isPresent()) {
+
+            receiptService.createReceiptIfMissing(
+                    existing.get()
+            );
 
             return new PaymentResponse(
                     existing.get()
@@ -196,6 +205,10 @@ public class PaymentService {
 
         Payment savedPayment =
                 paymentRepository.save(payment);
+
+        receiptService.createReceiptIfMissing(
+                savedPayment
+        );
 
         return new PaymentResponse(
                 savedPayment
