@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Query;
+import java.math.BigDecimal;
 
 public interface LoanRepository
         extends JpaRepository<Loan, Long> {
@@ -26,4 +28,11 @@ public interface LoanRepository
             Long borrowerId,
             Collection<LoanStatus> statuses
     );
+    long countByStatus(LoanStatus status);
+    @Query("""
+       SELECT COALESCE(SUM(l.outstandingBalance), 0)
+       FROM Loan l
+       WHERE l.status = com.quickcash.entity.LoanStatus.ACTIVE
+       """)
+    BigDecimal getTotalOutstandingBalance();
 }

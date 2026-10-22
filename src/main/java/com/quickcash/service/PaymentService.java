@@ -228,4 +228,18 @@ public class PaymentService {
                 .map(PaymentResponse::new)
                 .toList();
     }
+
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> getMyPayments(
+            String borrowerEmail
+    ) {
+
+        return paymentRepository
+                .findByLoanBorrowerUserEmailOrderByPaymentDateDesc(
+                        borrowerEmail
+                )
+                .stream()
+                .map(PaymentResponse::new)
+                .toList();
+    }
 }
