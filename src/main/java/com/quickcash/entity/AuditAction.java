@@ -1,0 +1,17 @@
+package com.quickcash.entity;
+
+public enum AuditAction {
+
+    BORROWER_APPROVED,
+    BORROWER_REJECTED,
+
+    LOAN_APPLICATION_CREATED,
+    LOAN_APPROVED,
+    LOAN_REJECTED,
+
+    DISBURSEMENT_COMPLETED,
+
+    PAYMENT_RECORDED,
+
+    RECONCILIATION_CREATED
+}

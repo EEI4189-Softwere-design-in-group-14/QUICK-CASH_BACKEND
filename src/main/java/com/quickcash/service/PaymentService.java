@@ -1,3 +1,4 @@
+
 package com.quickcash.service;
 
 import com.quickcash.dto.PaymentRequest;
@@ -26,24 +27,20 @@ public class PaymentService {
     private final LoanRepository loanRepository;
     private final UserRepository userRepository;
     private final ReceiptService receiptService;
+    private final AuditService auditService;
+
     public PaymentService(
             PaymentRepository paymentRepository,
             LoanRepository loanRepository,
             UserRepository userRepository,
-            ReceiptService receiptService
+            ReceiptService receiptService,
+            AuditService auditService
     ) {
-
-        this.paymentRepository =
-                paymentRepository;
-
-        this.loanRepository =
-                loanRepository;
-
-        this.userRepository =
-                userRepository;
-
-        this.receiptService =
-                receiptService;
+        this.paymentRepository = paymentRepository;
+        this.loanRepository = loanRepository;
+        this.userRepository = userRepository;
+        this.receiptService = receiptService;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -53,134 +50,90 @@ public class PaymentService {
             PaymentSource source
     ) {
 
-        /*
-         * Idempotency protection.
-         *
-         * If Flutter sends the same offline transaction
-         * twice, return the existing payment instead of
-         * deducting the balance twice.
-         */
-        var existing =
-                paymentRepository
-                        .findByClientTransactionId(
-                                request
-                                        .getClientTransactionId()
-                                        .trim()
-                        );
+        // Prevent duplicate online or offline transactions.
+        var existing = paymentRepository.findByClientTransactionId(
+                request.getClientTransactionId().trim()
+        );
 
         if (existing.isPresent()) {
+            receiptService.createReceiptIfMissing(existing.get());
 
-            receiptService.createReceiptIfMissing(
-                    existing.get()
-            );
-
-            return new PaymentResponse(
-                    existing.get()
-            );
+            return new PaymentResponse(existing.get());
         }
 
-        User collector =
-                userRepository
-                        .findByEmail(collectorEmail)
-                        .orElseThrow(() ->
-                                new ResponseStatusException(
-                                        HttpStatus.NOT_FOUND,
-                                        "Collector not found"
-                                )
-                        );
+        // Find the collector.
+        User collector = userRepository.findByEmail(collectorEmail)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Collector not found"
+                        )
+                );
 
         if (collector.getRole() != Role.COLLECTOR) {
-
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Only field collectors can record payments"
             );
         }
 
-        Loan loan =
-                loanRepository
-                        .findById(request.getLoanId())
-                        .orElseThrow(() ->
-                                new ResponseStatusException(
-                                        HttpStatus.NOT_FOUND,
-                                        "Loan not found"
-                                )
-                        );
+        // Find the loan.
+        Loan loan = loanRepository.findById(request.getLoanId())
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Loan not found"
+                        )
+                );
 
         if (loan.getStatus() != LoanStatus.ACTIVE) {
-
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Payments can only be recorded for active loans"
             );
         }
 
-        BigDecimal balanceBefore =
-                loan.getOutstandingBalance();
+        BigDecimal balanceBefore = loan.getOutstandingBalance();
 
         if (balanceBefore == null) {
-
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Loan outstanding balance is not initialized"
             );
         }
 
-        BigDecimal paymentAmount =
-                request.getAmount();
+        BigDecimal paymentAmount = request.getAmount();
 
-        if (paymentAmount.compareTo(
-                balanceBefore
-        ) > 0) {
-
+        if (paymentAmount.compareTo(balanceBefore) > 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Payment amount cannot exceed outstanding balance"
             );
         }
 
-        BigDecimal balanceAfter =
-                balanceBefore.subtract(
-                        paymentAmount
-                );
+        BigDecimal balanceAfter = balanceBefore.subtract(paymentAmount);
 
-        Payment payment =
-                new Payment();
+        // Create the payment record.
+        Payment payment = new Payment();
 
         payment.setPaymentCode(
-                "PAY-" +
-                        UUID.randomUUID()
-                                .toString()
-                                .substring(0, 8)
-                                .toUpperCase()
+                "PAY-" + UUID.randomUUID()
+                        .toString()
+                        .substring(0, 8)
+                        .toUpperCase()
         );
 
         payment.setClientTransactionId(
-                request
-                        .getClientTransactionId()
-                        .trim()
+                request.getClientTransactionId().trim()
         );
 
         payment.setLoan(loan);
         payment.setCollector(collector);
-
-        payment.setAmount(
-                paymentAmount
-        );
-
-        payment.setBalanceBefore(
-                balanceBefore
-        );
-
-        payment.setBalanceAfter(
-                balanceAfter
-        );
-
+        payment.setAmount(paymentAmount);
+        payment.setBalanceBefore(balanceBefore);
+        payment.setBalanceAfter(balanceAfter);
         payment.setSource(source);
-
-        payment.setStatus(
-                PaymentStatus.ACCEPTED
-        );
+        payment.setStatus(PaymentStatus.ACCEPTED);
 
         payment.setPaymentDate(
                 request.getPaymentDate() != null
@@ -188,51 +141,49 @@ public class PaymentService {
                         : LocalDateTime.now()
         );
 
-        loan.setOutstandingBalance(
-                balanceAfter
-        );
+        // Update the outstanding loan balance.
+        loan.setOutstandingBalance(balanceAfter);
 
-        if (balanceAfter.compareTo(
-                BigDecimal.ZERO
-        ) == 0) {
-
-            loan.setStatus(
-                    LoanStatus.COMPLETED
-            );
+        if (balanceAfter.compareTo(BigDecimal.ZERO) == 0) {
+            loan.setStatus(LoanStatus.COMPLETED);
         }
 
         loanRepository.save(loan);
 
-        Payment savedPayment =
-                paymentRepository.save(payment);
+        // Save the payment first to obtain its generated ID.
+        Payment savedPayment = paymentRepository.save(payment);
 
-        receiptService.createReceiptIfMissing(
-                savedPayment
+        // Record the payment in the audit trail.
+        auditService.record(
+                collector,
+                AuditAction.PAYMENT_RECORDED,
+                "PAYMENT",
+                savedPayment.getPaymentId(),
+                savedPayment.getPaymentCode(),
+                "Payment of LKR "
+                        + savedPayment.getAmount()
+                        + " recorded for loan "
+                        + loan.getLoanCode()
         );
 
-        return new PaymentResponse(
-                savedPayment
-        );
+        // Generate the receipt.
+        receiptService.createReceiptIfMissing(savedPayment);
+
+        return new PaymentResponse(savedPayment);
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentResponse> getLoanPayments(
-            Long loanId
-    ) {
+    public List<PaymentResponse> getLoanPayments(Long loanId) {
 
         return paymentRepository
-                .findByLoanLoanIdOrderByPaymentDateDesc(
-                        loanId
-                )
+                .findByLoanLoanIdOrderByPaymentDateDesc(loanId)
                 .stream()
                 .map(PaymentResponse::new)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentResponse> getMyPayments(
-            String borrowerEmail
-    ) {
+    public List<PaymentResponse> getMyPayments(String borrowerEmail) {
 
         return paymentRepository
                 .findByLoanBorrowerUserEmailOrderByPaymentDateDesc(
