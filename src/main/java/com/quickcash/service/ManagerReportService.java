@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Service
 public class ManagerReportService {
@@ -87,6 +89,36 @@ public class ManagerReportService {
                 .findAll()
                 .stream()
                 .map(BorrowerResponse::new)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> getPaymentsByDateRange(
+            LocalDate from,
+            LocalDate to
+    ) {
+
+        if (from.isAfter(to)) {
+            throw new IllegalArgumentException(
+                    "'from' date cannot be after 'to' date"
+            );
+        }
+
+        LocalDateTime start =
+                from.atStartOfDay();
+
+        LocalDateTime end =
+                to.plusDays(1)
+                        .atStartOfDay()
+                        .minusNanos(1);
+
+        return paymentRepository
+                .findByPaymentDateBetweenOrderByPaymentDateDesc(
+                        start,
+                        end
+                )
+                .stream()
+                .map(PaymentResponse::new)
                 .toList();
     }
 }

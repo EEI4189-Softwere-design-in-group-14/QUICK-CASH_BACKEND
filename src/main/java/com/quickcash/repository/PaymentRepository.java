@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Query;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public interface PaymentRepository
         extends JpaRepository<Payment, Long> {
@@ -34,4 +35,9 @@ public interface PaymentRepository
        WHERE p.status = com.quickcash.entity.PaymentStatus.ACCEPTED
        """)
     BigDecimal getTotalCollectedAmount();
+
+    List<Payment> findByPaymentDateBetweenOrderByPaymentDateDesc(
+            LocalDateTime start,
+            LocalDateTime end
+    );
 }

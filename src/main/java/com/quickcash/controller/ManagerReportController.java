@@ -11,6 +11,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.springframework.format.annotation.DateTimeFormat;
+
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/manager/reports")
@@ -49,6 +52,32 @@ public class ManagerReportController {
 
         return ResponseEntity.ok(
                 reportService.getAllBorrowers()
+        );
+    }
+
+    @GetMapping("/payments/filter")
+    public ResponseEntity<List<PaymentResponse>>
+    getPaymentsByDateRange(
+
+            @RequestParam
+            @DateTimeFormat(
+                    iso = DateTimeFormat.ISO.DATE
+            )
+            LocalDate from,
+
+            @RequestParam
+            @DateTimeFormat(
+                    iso = DateTimeFormat.ISO.DATE
+            )
+            LocalDate to
+    ) {
+
+        return ResponseEntity.ok(
+                reportService
+                        .getPaymentsByDateRange(
+                                from,
+                                to
+                        )
         );
     }
 }
