@@ -23,6 +23,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import com.quickcash.entity.NotificationType;
+
 
 @Service
 public class LoanService {
@@ -32,19 +34,22 @@ public class LoanService {
     private final BorrowerRepository borrowerRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public LoanService(
             LoanRepository loanRepository,
             GuarantorRepository guarantorRepository,
             BorrowerRepository borrowerRepository,
             UserRepository userRepository,
-            AuditService auditService
+            AuditService auditService,
+            NotificationService notificationService
     ) {
         this.loanRepository = loanRepository;
         this.guarantorRepository = guarantorRepository;
         this.borrowerRepository = borrowerRepository;
         this.userRepository = userRepository;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     // =====================================================
@@ -282,6 +287,17 @@ public class LoanService {
                         + savedLoan.getApprovedAmount()
         );
 
+        notificationService.send(
+                savedLoan.getBorrower().getUser(),
+                NotificationType.LOAN_APPROVED,
+                "Loan Approved",
+                "Congratulations! Your loan "
+                        + savedLoan.getLoanCode()
+                        + " has been approved for LKR "
+                        + savedLoan.getApprovedAmount()
+                        + ". Awaiting disbursement."
+        );
+
         Guarantor guarantor = guarantorRepository
                 .findByLoanLoanId(savedLoan.getLoanId())
                 .orElse(null);
@@ -346,6 +362,16 @@ public class LoanService {
                 savedLoan.getLoanCode(),
                 "Loan rejected. Reason: "
                         + rejectionReason
+        );
+
+        notificationService.send(
+                savedLoan.getBorrower().getUser(),
+                NotificationType.LOAN_REJECTED,
+                "Loan Rejected",
+                "Your loan application "
+                        + savedLoan.getLoanCode()
+                        + " was rejected. Reason: "
+                        + savedLoan.getRejectionReason()
         );
 
         Guarantor guarantor = guarantorRepository

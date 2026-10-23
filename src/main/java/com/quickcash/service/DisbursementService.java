@@ -35,21 +35,23 @@ public class DisbursementService {
     private final AuditService auditService;
 
     private final SecureRandom secureRandom = new SecureRandom();
+    private final InstallmentScheduleService installmentScheduleService;
 
     public DisbursementService(
             DisbursementRepository disbursementRepository,
             LoanRepository loanRepository,
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            AuditService auditService
+            AuditService auditService,
+            InstallmentScheduleService installmentScheduleService
     ) {
         this.disbursementRepository = disbursementRepository;
         this.loanRepository = loanRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
+        this.installmentScheduleService = installmentScheduleService;
     }
-
     @Transactional
     public OtpRequestResponse requestOtp(Long loanId) {
 
@@ -199,6 +201,10 @@ public class DisbursementService {
         loanRepository.save(loan);
 
         Disbursement saved = disbursementRepository.save(disbursement);
+        installmentScheduleService.createMonthlySchedule(
+                loan,
+                saved.getDisbursedAt().toLocalDate()
+        );
 
         // Record the successful disbursement in the audit trail.
         auditService.record(
