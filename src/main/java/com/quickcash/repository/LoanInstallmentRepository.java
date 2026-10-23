@@ -2,13 +2,15 @@
 package com.quickcash.repository;
 
 import com.quickcash.entity.LoanInstallment;
+import com.quickcash.entity.LoanStatus;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
-@Repository
 public interface LoanInstallmentRepository
         extends JpaRepository<LoanInstallment, Long> {
 
@@ -17,5 +19,40 @@ public interface LoanInstallmentRepository
     List<LoanInstallment>
     findByLoanLoanIdOrderByInstallmentNumberAsc(
             Long loanId
+    );
+
+    // Installments due within the selected date range.
+    @Query("""
+        SELECT i
+        FROM LoanInstallment i
+        JOIN FETCH i.loan l
+        JOIN FETCH l.borrower b
+        JOIN FETCH b.user u
+        WHERE i.dueDate BETWEEN :startDate AND :endDate
+          AND i.paidAmount < i.principalDue
+          AND l.status = :status
+        ORDER BY i.dueDate ASC
+        """)
+    List<LoanInstallment> findUnpaidDueBetween(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("status") LoanStatus status
+    );
+
+    // Installments past the due date and not fully paid.
+    @Query("""
+        SELECT i
+        FROM LoanInstallment i
+        JOIN FETCH i.loan l
+        JOIN FETCH l.borrower b
+        JOIN FETCH b.user u
+        WHERE i.dueDate < :today
+          AND i.paidAmount < i.principalDue
+          AND l.status = :status
+        ORDER BY i.dueDate ASC
+        """)
+    List<LoanInstallment> findOverdueUnpaid(
+            @Param("today") LocalDate today,
+            @Param("status") LoanStatus status
     );
 }
