@@ -73,39 +73,37 @@ public class ReceiptService {
         return new ReceiptResponse(saved);
     }
 
+
     @Transactional(readOnly = true)
     public ReceiptResponse getReceiptByPayment(
             Long paymentId,
             String currentUserEmail
     ) {
 
-        Payment payment =
-                paymentRepository
-                        .findById(paymentId)
-                        .orElseThrow(() ->
-                                new ResponseStatusException(
-                                        HttpStatus.NOT_FOUND,
-                                        "Payment not found"
-                                )
-                        );
+        Payment payment = paymentRepository
+                .findById(paymentId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Payment not found"
+                        )
+                );
 
-        Receipt receipt =
-                receiptRepository
-                        .findByPaymentPaymentId(paymentId)
-                        .orElseThrow(() ->
-                                new ResponseStatusException(
-                                        HttpStatus.NOT_FOUND,
-                                        "Receipt not found for this payment"
-                                )
-                        );
+        // Check authorization BEFORE fetching the receipt
+        checkAccess(currentUserEmail, payment);
 
-        checkAccess(
-                currentUserEmail,
-                payment
-        );
+        Receipt receipt = receiptRepository
+                .findByPaymentPaymentId(paymentId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Receipt not found for this payment"
+                        )
+                );
 
         return new ReceiptResponse(receipt);
     }
+
 
     @Transactional(readOnly = true)
     public ReceiptResponse getReceiptById(
