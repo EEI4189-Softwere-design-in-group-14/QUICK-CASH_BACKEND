@@ -4,6 +4,7 @@ public enum Role {
 
     BORROWER,
     MANAGER,
-    COLLECTOR
+    COLLECTOR,
+    OWNER
 
 }

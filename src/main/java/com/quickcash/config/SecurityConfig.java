@@ -48,14 +48,27 @@ public class SecurityConfig {
                         )
                 )
 
+
                 .authorizeHttpRequests(auth -> auth
+
+                        // Public authentication endpoints
                         .requestMatchers(
                                 "/api/auth/register",
                                 "/api/auth/login"
                         ).permitAll()
 
+                        // Only the business OWNER can access these APIs
+                        .requestMatchers("/api/owner/**")
+                        .hasRole("OWNER")
+
+                        // Both OWNER and MANAGER can access manager APIs
+                        .requestMatchers("/api/manager/**")
+                        .hasAnyRole("OWNER", "MANAGER")
+
+                        // Other APIs require authentication
                         .anyRequest().authenticated()
                 )
+
 
                 .addFilterBefore(
                         jwtAuthenticationFilter,
