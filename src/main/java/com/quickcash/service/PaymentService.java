@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.quickcash.entity.NotificationType;
 
 @Service
 public class PaymentService {
@@ -28,19 +29,25 @@ public class PaymentService {
     private final UserRepository userRepository;
     private final ReceiptService receiptService;
     private final AuditService auditService;
+    private final NotificationService notificationService;
+    private final InstallmentAllocationService installmentAllocationService;
 
     public PaymentService(
             PaymentRepository paymentRepository,
             LoanRepository loanRepository,
             UserRepository userRepository,
             ReceiptService receiptService,
-            AuditService auditService
+            AuditService auditService,
+            NotificationService notificationService,
+            InstallmentAllocationService installmentAllocationService
     ) {
         this.paymentRepository = paymentRepository;
         this.loanRepository = loanRepository;
         this.userRepository = userRepository;
         this.receiptService = receiptService;
         this.auditService = auditService;
+        this.notificationService = notificationService;
+        this.installmentAllocationService = installmentAllocationService;
     }
 
     @Transactional
@@ -153,6 +160,11 @@ public class PaymentService {
         // Save the payment first to obtain its generated ID.
         Payment savedPayment = paymentRepository.save(payment);
 
+        installmentAllocationService.allocatePayment(
+                loan,
+                savedPayment.getAmount()
+        );
+
         // Record the payment in the audit trail.
         auditService.record(
                 collector,
@@ -168,6 +180,20 @@ public class PaymentService {
 
         // Generate the receipt.
         receiptService.createReceiptIfMissing(savedPayment);
+
+// Notify the borrower about the successful payment.
+        notificationService.send(
+                loan.getBorrower().getUser(),
+                NotificationType.PAYMENT_RECEIVED,
+                "Payment Received",
+                "Your payment of LKR "
+                        + savedPayment.getAmount()
+                        + " for loan "
+                        + loan.getLoanCode()
+                        + " was recorded successfully. "
+                        + "Remaining balance: LKR "
+                        + loan.getOutstandingBalance()
+        );
 
         return new PaymentResponse(savedPayment);
     }
