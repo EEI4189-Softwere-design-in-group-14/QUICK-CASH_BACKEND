@@ -30,6 +30,13 @@ public interface LoanRepository
     );
 
 
+    List<Loan> findByAssignedCollector_UserIdAndStatusOrderByLoanIdDesc(
+            Long collectorUserId,
+            LoanStatus status
+    );
+
+
+
     boolean existsByBorrowerBorrowerIdAndStatusIn(
             Long borrowerId,
             Collection<LoanStatus> statuses
