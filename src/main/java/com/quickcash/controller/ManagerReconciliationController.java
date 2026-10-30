@@ -23,7 +23,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/manager/reconciliations")
-@PreAuthorize("hasRole('MANAGER')")
+@PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")
 public class ManagerReconciliationController {
 
     private final ReconciliationService reconciliationService;

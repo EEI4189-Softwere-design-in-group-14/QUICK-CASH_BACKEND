@@ -13,7 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/manager/audit-logs")
-@PreAuthorize("hasRole('MANAGER')")
+@PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")
 public class ManagerAuditController {
 
     private final AuditService auditService;

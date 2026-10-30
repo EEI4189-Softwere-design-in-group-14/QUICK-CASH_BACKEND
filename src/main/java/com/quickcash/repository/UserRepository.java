@@ -1,4 +1,6 @@
 package com.quickcash.repository;
+import java.util.List;
+import com.quickcash.entity.Role;
 
 import com.quickcash.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,5 +16,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
 
     boolean existsByPhone(String phone);
+    List<User> findByRoleOrderByUserIdAsc(Role role);
 
 }

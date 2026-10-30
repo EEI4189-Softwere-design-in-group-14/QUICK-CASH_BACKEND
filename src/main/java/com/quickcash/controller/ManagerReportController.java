@@ -17,7 +17,7 @@ import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/manager/reports")
-@PreAuthorize("hasRole('MANAGER')")
+@PreAuthorize("hasAnyRole('OWNER', 'MANAGER')")
 public class ManagerReportController {
 
     private final ManagerReportService reportService;
