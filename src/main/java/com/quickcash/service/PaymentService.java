@@ -64,7 +64,7 @@ public class PaymentService {
         User collector = requireActiveCollector(collectorEmail);
 
         // Step 2: Verify loan assignment.
-        Loan loan = requireAssignedLoan(
+        Loan loan = requireAssignedLoanForPayment(
                 request.getLoanId(),
                 collector
         );
@@ -353,4 +353,35 @@ public class PaymentService {
 
         return loan;
     }
+
+
+    private Loan requireAssignedLoanForPayment(
+            Long loanId,
+            User collector
+    ) {
+
+        // Lock this loan during payment processing.
+        Loan loan = loanRepository.findByIdForUpdate(loanId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Assigned loan not found"
+                        )
+                );
+
+        // Verify the current collector assignment.
+        if (loan.getAssignedCollector() == null
+                || !loan.getAssignedCollector()
+                .getUserId()
+                .equals(collector.getUserId())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Assigned loan not found"
+            );
+        }
+
+        return loan;
+    }
+
 }

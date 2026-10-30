@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Query;
 import java.math.BigDecimal;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.repository.query.Param;
 
 public interface LoanRepository
         extends JpaRepository<Loan, Long> {
@@ -48,4 +51,12 @@ public interface LoanRepository
        WHERE l.status = com.quickcash.entity.LoanStatus.ACTIVE
        """)
     BigDecimal getTotalOutstandingBalance();
+
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT l FROM Loan l WHERE l.loanId = :loanId")
+    Optional<Loan> findByIdForUpdate(
+            @Param("loanId") Long loanId
+    );
+
 }
