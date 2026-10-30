@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.quickcash.entity.AuditAction;
 
 @Service
 public class ReconciliationService {
@@ -28,12 +29,15 @@ public class ReconciliationService {
     private final ReconciliationRepository reconciliationRepository;
     private final PaymentRepository paymentRepository;
     private final UserRepository userRepository;
+    private final AuditService auditService;
 
     public ReconciliationService(
             ReconciliationRepository reconciliationRepository,
             PaymentRepository paymentRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            AuditService auditService
     ) {
+
         this.reconciliationRepository =
                 reconciliationRepository;
 
@@ -42,6 +46,9 @@ public class ReconciliationService {
 
         this.userRepository =
                 userRepository;
+
+        this.auditService =
+                auditService;
     }
 
     @Transactional
@@ -157,6 +164,16 @@ public class ReconciliationService {
         Reconciliation saved =
                 reconciliationRepository
                         .save(reconciliation);
+
+        auditService.record(
+                manager,
+                AuditAction.RECONCILIATION_CREATED,
+                "RECONCILIATION",
+                saved.getReconciliationId(),
+                saved.getReconciliationDate().toString(),
+                "Bank reconciliation completed with status "
+                        + saved.getStatus().name()
+        );
 
         return new ReconciliationResponse(
                 saved
