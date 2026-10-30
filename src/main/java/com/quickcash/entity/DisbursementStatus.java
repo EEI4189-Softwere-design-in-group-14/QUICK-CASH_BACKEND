@@ -1,4 +1,8 @@
 package com.quickcash.entity;
 
-public class DisbursementStatus {
+public enum DisbursementStatus {
+
+    OTP_PENDING,
+    COMPLETED,
+    EXPIRED
 }
