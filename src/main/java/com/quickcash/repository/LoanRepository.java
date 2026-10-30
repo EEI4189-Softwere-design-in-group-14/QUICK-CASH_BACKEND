@@ -24,6 +24,12 @@ public interface LoanRepository
             LoanStatus status
     );
 
+
+    List<Loan> findByBorrower_User_EmailIgnoreCaseOrderByLoanIdDesc(
+            String email
+    );
+
+
     boolean existsByBorrowerBorrowerIdAndStatusIn(
             Long borrowerId,
             Collection<LoanStatus> statuses

@@ -15,4 +15,10 @@ public interface NotificationRepository
             Long userId
     );
 
+
+    long countByRecipient_EmailIgnoreCaseAndReadAtIsNull(
+            String email
+    );
+
+
 }
