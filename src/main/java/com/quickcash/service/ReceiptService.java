@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
+import java.util.List;
 
 @Service
 public class ReceiptService {
@@ -203,5 +204,18 @@ public class ReceiptService {
                 date +
                 "-" +
                 random;
+    }
+    @Transactional(readOnly = true)
+    public List<ReceiptResponse> getMyReceipts(
+            String borrowerEmail
+    ) {
+
+        return receiptRepository
+                .findByPaymentLoanBorrowerUserEmailOrderByIssuedAtDesc(
+                        borrowerEmail
+                )
+                .stream()
+                .map(ReceiptResponse::new)
+                .toList();
     }
 }

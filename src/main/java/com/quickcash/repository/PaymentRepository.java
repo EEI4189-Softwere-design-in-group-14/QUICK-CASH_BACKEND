@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Query;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public interface PaymentRepository
         extends JpaRepository<Payment, Long> {
@@ -20,5 +23,21 @@ public interface PaymentRepository
 
     List<Payment> findByLoanLoanIdOrderByPaymentDateDesc(
             Long loanId
+    );
+
+    List<Payment> findByLoanBorrowerUserEmailOrderByPaymentDateDesc(
+            String email
+    );
+
+    @Query("""
+       SELECT COALESCE(SUM(p.amount), 0)
+       FROM Payment p
+       WHERE p.status = com.quickcash.entity.PaymentStatus.ACCEPTED
+       """)
+    BigDecimal getTotalCollectedAmount();
+
+    List<Payment> findByPaymentDateBetweenOrderByPaymentDateDesc(
+            LocalDateTime start,
+            LocalDateTime end
     );
 }

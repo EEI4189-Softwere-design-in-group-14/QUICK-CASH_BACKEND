@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import com.quickcash.entity.BorrowerStatus;
 
 public interface BorrowerRepository
         extends JpaRepository<Borrower, Long> {
@@ -23,4 +24,5 @@ public interface BorrowerRepository
     List<Borrower> findByStatus(
             BorrowerStatus status
     );
+    long countByStatus(BorrowerStatus status);
 }
