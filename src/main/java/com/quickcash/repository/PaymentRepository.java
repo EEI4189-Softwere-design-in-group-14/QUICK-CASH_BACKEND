@@ -10,7 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.springframework.data.repository.query.Param;
-
+import com.quickcash.entity.PaymentStatus;
 
 public interface PaymentRepository
         extends JpaRepository<Payment, Long> {
@@ -42,6 +42,15 @@ public interface PaymentRepository
             LocalDateTime start,
             LocalDateTime end
     );
+
+
+    List<Payment> findByCollector_UserIdAndStatusAndPaymentDateGreaterThanEqualAndPaymentDateLessThanOrderByPaymentDateDesc(
+            Long collectorUserId,
+            PaymentStatus status,
+            LocalDateTime start,
+            LocalDateTime end
+    );
+
 
     @Query("""
        SELECT COALESCE(SUM(p.amount), 0)

@@ -1,24 +1,33 @@
+
 package com.quickcash.config;
 
 import com.quickcash.security.JwtAuthenticationFilter;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import jakarta.servlet.DispatcherType;
+
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter
+    ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
@@ -40,6 +49,7 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
+                // JWT-based stateless API
                 .csrf(csrf -> csrf.disable())
 
                 .sessionManagement(session ->
@@ -48,28 +58,33 @@ public class SecurityConfig {
                         )
                 )
 
-
                 .authorizeHttpRequests(auth -> auth
+                        // Allow Spring Boot to return error responses
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 
-                        // Public authentication endpoints
+                        // Public login and registration
                         .requestMatchers(
                                 "/api/auth/register",
                                 "/api/auth/login"
                         ).permitAll()
 
-                        // Only the business OWNER can access these APIs
+                        // Owner only
                         .requestMatchers("/api/owner/**")
                         .hasRole("OWNER")
 
-                        // Both OWNER and MANAGER can access manager APIs
+                        // Manager and owner
                         .requestMatchers("/api/manager/**")
-                        .hasAnyRole("OWNER", "MANAGER")
+                        .hasAnyRole("MANAGER", "OWNER")
 
-                        // Other APIs require authentication
+                        // Collector only
+                        .requestMatchers("/api/collector/**")
+                        .hasRole("COLLECTOR")
+
+                        // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )
 
-
+                // Validate JWT before username/password filter
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
