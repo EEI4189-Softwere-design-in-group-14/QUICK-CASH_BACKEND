@@ -76,4 +76,22 @@ public interface LoanInstallmentRepository
             @Param("asOfDate") LocalDate asOfDate
     );
 
+    @Query("""
+    SELECT i
+    FROM LoanInstallment i
+    JOIN FETCH i.loan l
+    JOIN FETCH l.borrower b
+    JOIN FETCH b.user u
+    LEFT JOIN FETCH l.assignedCollector c
+    WHERE l.status = :status
+      AND i.dueDate < :asOfDate
+      AND i.paidAmount < i.principalDue
+    ORDER BY i.dueDate ASC, i.installmentNumber ASC
+    """)
+    List<LoanInstallment> findManagerOverdueInstallments(
+            @Param("status") LoanStatus status,
+            @Param("asOfDate") LocalDate asOfDate
+    );
+
+
 }
