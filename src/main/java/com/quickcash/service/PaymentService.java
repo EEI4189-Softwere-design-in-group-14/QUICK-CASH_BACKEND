@@ -13,6 +13,7 @@ import com.quickcash.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -53,7 +54,7 @@ public class PaymentService {
     // 1. RECORD ONLINE OR OFFLINE PAYMENT
     // ==========================================
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PaymentResponse recordPayment(
             String collectorEmail,
             PaymentRequest request,
