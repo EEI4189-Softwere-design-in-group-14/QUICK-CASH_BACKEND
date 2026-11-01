@@ -7,6 +7,7 @@ import com.quickcash.repository.LoanInstallmentRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -38,31 +39,54 @@ public class InstallmentAllocationService {
             BigDecimal paymentAmount
     ) {
 
-        if (paymentAmount == null ||
-                paymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+        // Step 1: Validate loan
+        if (loan == null || loan.getLoanId() == null) {
+            throw new IllegalArgumentException(
+                    "Saved loan is required"
+            );
+        }
+
+        // Step 2: Validate payment amount
+        if (paymentAmount == null
+                || paymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Payment amount must be greater than zero"
             );
         }
 
+        // Step 3: Load loan installments
         List<LoanInstallment> installments =
                 installmentRepository
                         .findByLoanLoanIdOrderByInstallmentNumberAsc(
                                 loan.getLoanId()
                         );
 
-        // Preserve the existing payment flow for older loans
-        // that were created before installment schedules existed.
+        // Step 4: Handle missing schedule
         if (installments.isEmpty()) {
+
+            // Daily loans must have an installment schedule
+            if ("DAILY_FIXED_TOTAL".equals(
+                    loan.getRepaymentPlanType())) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Daily loan installment schedule is missing"
+                );
+            }
+
+            // Preserve existing legacy monthly loan behavior
             log.warn(
                     "Loan {} has no installment schedule. "
                             + "Payment allocation was skipped.",
                     loan.getLoanCode()
             );
+
             return;
         }
 
+        // Step 5: Start allocating payment
         BigDecimal remaining = paymentAmount;
 
         for (LoanInstallment installment : installments) {
@@ -77,8 +101,41 @@ public class InstallmentAllocationService {
                 paid = BigDecimal.ZERO;
             }
 
+            if (paid.signum() < 0) {
+                throw new IllegalStateException(
+                        "Installment paid amount cannot be negative"
+                );
+            }
+
+            // Principal portion
+            BigDecimal principalDue =
+                    installment.getPrincipalDue();
+
+            // Interest portion
+            BigDecimal interestDue =
+                    installment.getInterestDue() == null
+                            ? BigDecimal.ZERO
+                            : installment.getInterestDue();
+
+            // Validate installment amounts
+            if (principalDue == null
+                    || principalDue.signum() < 0
+                    || interestDue.signum() < 0) {
+
+                throw new IllegalStateException(
+                        "Invalid installment amount"
+                );
+            }
+
+            // Step 6: Total installment
+            // Daily loan: principal + interest
+            // Monthly loan: principal + 0 interest
+            BigDecimal totalDue =
+                    principalDue.add(interestDue);
+
+            // Step 7: Calculate unpaid installment amount
             BigDecimal unpaid =
-                    installment.getPrincipalDue().subtract(paid);
+                    totalDue.subtract(paid);
 
             if (unpaid.compareTo(BigDecimal.ZERO) < 0) {
                 throw new IllegalStateException(
@@ -86,11 +143,14 @@ public class InstallmentAllocationService {
                 );
             }
 
+            // Skip fully paid installments
             if (unpaid.compareTo(BigDecimal.ZERO) == 0) {
                 continue;
             }
 
-            BigDecimal allocated = remaining.min(unpaid);
+            // Step 8: Allocate payment
+            BigDecimal allocated =
+                    remaining.min(unpaid);
 
             installment.setPaidAmount(
                     paid.add(allocated)
@@ -99,15 +159,16 @@ public class InstallmentAllocationService {
             remaining = remaining.subtract(allocated);
         }
 
-        // Reject allocation inconsistencies and roll back
-        // the enclosing payment transaction.
+        // Step 9: Reject payment that exceeds remaining dues
         if (remaining.compareTo(BigDecimal.ZERO) > 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "Payment exceeds the unpaid scheduled principal"
+                    "Payment exceeds the unpaid scheduled amount"
             );
         }
 
+        // Step 10: Save updated installments
         installmentRepository.saveAll(installments);
     }
 }

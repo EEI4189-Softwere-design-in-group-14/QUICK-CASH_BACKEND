@@ -80,10 +80,19 @@ public class InstallmentReminderService {
             return;
         }
 
+
+        BigDecimal paid =
+                installment.getPaidAmount() == null
+                        ? BigDecimal.ZERO
+                        : installment.getPaidAmount();
+
+        BigDecimal totalDue =
+                installment.getTotalDue();
+
         BigDecimal remaining =
-                installment.getPrincipalDue().subtract(
-                        installment.getPaidAmount()
-                );
+                totalDue.subtract(paid)
+                        .max(BigDecimal.ZERO);
+
 
         // Never notify for fully paid installments.
         if (remaining.compareTo(BigDecimal.ZERO) <= 0) {

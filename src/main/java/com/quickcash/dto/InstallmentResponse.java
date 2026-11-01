@@ -11,7 +11,11 @@ public record InstallmentResponse(
         Long installmentId,
         Integer installmentNumber,
         LocalDate dueDate,
+
         BigDecimal principalDue,
+        BigDecimal interestDue,
+        BigDecimal totalDue,
+
         BigDecimal paidAmount,
         BigDecimal remainingAmount,
         String status
@@ -22,16 +26,27 @@ public record InstallmentResponse(
             LoanInstallment installment,
             LocalDate today
     ) {
-
         this(
                 installment.getInstallmentId(),
                 installment.getInstallmentNumber(),
                 installment.getDueDate(),
+
                 installment.getPrincipalDue(),
+                getInterest(installment),
+                installment.getTotalDue(),
+
                 getPaid(installment),
                 getRemaining(installment),
                 calculateStatus(installment, today)
         );
+    }
+
+    private static BigDecimal getInterest(
+            LoanInstallment installment
+    ) {
+        return installment.getInterestDue() == null
+                ? BigDecimal.ZERO
+                : installment.getInterestDue();
     }
 
     private static BigDecimal getPaid(
@@ -45,7 +60,7 @@ public record InstallmentResponse(
     private static BigDecimal getRemaining(
             LoanInstallment installment
     ) {
-        return installment.getPrincipalDue()
+        return installment.getTotalDue()
                 .subtract(getPaid(installment))
                 .max(BigDecimal.ZERO);
     }
@@ -56,10 +71,10 @@ public record InstallmentResponse(
     ) {
 
         BigDecimal paid = getPaid(installment);
-        BigDecimal due = installment.getPrincipalDue();
+        BigDecimal totalDue = installment.getTotalDue();
         LocalDate dueDate = installment.getDueDate();
 
-        if (paid.compareTo(due) >= 0) {
+        if (paid.compareTo(totalDue) >= 0) {
             return "PAID";
         }
 

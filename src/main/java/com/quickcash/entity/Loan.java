@@ -65,6 +65,37 @@ public class Loan {
         applicationDate = LocalDateTime.now();
     }
 
+
+    // Identifies the repayment method
+    @Column(
+            name = "repayment_plan_type",
+            nullable = false,
+            length = 30
+    )
+    private String repaymentPlanType =
+            "MONTHLY_PRINCIPAL_ONLY";
+
+    // Total amount the borrower must repay
+    @Column(
+            name = "total_repayment_amount",
+            precision = 12,
+            scale = 2
+    )
+    private BigDecimal totalRepaymentAmount;
+
+    // Total interest amount
+    @Column(
+            name = "interest_amount",
+            precision = 12,
+            scale = 2
+    )
+    private BigDecimal interestAmount;
+
+    // Number of daily installments
+    @Column(name = "repayment_days")
+    private Integer repaymentDays;
+
+
     public Loan() {
     }
 
@@ -184,5 +215,41 @@ public class Loan {
     public void setAssignedCollector(User assignedCollector) {
         this.assignedCollector = assignedCollector;
     }
+
+
+    public String getRepaymentPlanType() {
+        return repaymentPlanType;
+    }
+
+    public void setRepaymentPlanType(String repaymentPlanType) {
+        this.repaymentPlanType = repaymentPlanType;
+    }
+
+    public BigDecimal getTotalRepaymentAmount() {
+        return totalRepaymentAmount;
+    }
+
+    public void setTotalRepaymentAmount(
+            BigDecimal totalRepaymentAmount
+    ) {
+        this.totalRepaymentAmount = totalRepaymentAmount;
+    }
+
+    public BigDecimal getInterestAmount() {
+        return interestAmount;
+    }
+
+    public void setInterestAmount(BigDecimal interestAmount) {
+        this.interestAmount = interestAmount;
+    }
+
+    public Integer getRepaymentDays() {
+        return repaymentDays;
+    }
+
+    public void setRepaymentDays(Integer repaymentDays) {
+        this.repaymentDays = repaymentDays;
+    }
+
 
 }

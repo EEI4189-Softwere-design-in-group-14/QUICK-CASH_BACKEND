@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 @Service
 public class DisbursementService {
@@ -187,24 +188,81 @@ public class DisbursementService {
         disbursement.setConfirmedBy(manager);
         disbursement.setStatus(DisbursementStatus.COMPLETED);
 
+
         Loan loan = disbursement.getLoan();
 
+        String planType = loan.getRepaymentPlanType();
+
+// Step 1: Set the correct outstanding balance
+        if ("DAILY_FIXED_TOTAL".equals(planType)) {
+
+            if (loan.getApprovedAmount() == null
+                    || loan.getTotalRepaymentAmount() == null
+                    || loan.getInterestAmount() == null
+                    || loan.getRepaymentDays() == null
+                    || loan.getRepaymentDays() <= 0) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Daily repayment details are incomplete"
+                );
+            }
+
+            BigDecimal expectedTotal = loan.getApprovedAmount()
+                    .add(loan.getInterestAmount());
+
+            if (expectedTotal.compareTo(
+                    loan.getTotalRepaymentAmount()) != 0) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Loan repayment amounts are inconsistent"
+                );
+            }
+
+            // Daily loan includes principal + interest.
+            loan.setOutstandingBalance(
+                    loan.getTotalRepaymentAmount()
+            );
+
+        } else if ("MONTHLY_PRINCIPAL_ONLY".equals(planType)) {
+
+            // Preserve the previous monthly loan behavior.
+            loan.setOutstandingBalance(
+                    loan.getApprovedAmount()
+            );
+
+        } else {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Unsupported repayment plan type"
+            );
+        }
+
+// Step 2: Activate the loan
         loan.setStatus(LoanStatus.ACTIVE);
-
-        /*
-         * Until the final interest and repayment formula
-         * is confirmed, use the approved principal as
-         * the initial outstanding balance.
-         */
-        loan.setOutstandingBalance(loan.getApprovedAmount());
-
         loanRepository.save(loan);
 
-        Disbursement saved = disbursementRepository.save(disbursement);
-        installmentScheduleService.createMonthlySchedule(
-                loan,
-                saved.getDisbursedAt().toLocalDate()
-        );
+// Step 3: Save disbursement
+        Disbursement saved =
+                disbursementRepository.save(disbursement);
+
+// Step 4: Generate the correct installment schedule
+        if ("DAILY_FIXED_TOTAL".equals(planType)) {
+
+            installmentScheduleService.createDailySchedule(
+                    loan,
+                    saved.getDisbursedAt().toLocalDate()
+            );
+
+        } else {
+
+            installmentScheduleService.createMonthlySchedule(
+                    loan,
+                    saved.getDisbursedAt().toLocalDate()
+            );
+        }
 
         // Record the successful disbursement in the audit trail.
         auditService.record(

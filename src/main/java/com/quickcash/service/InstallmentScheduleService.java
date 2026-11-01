@@ -113,4 +113,98 @@ public class InstallmentScheduleService {
 
         installmentRepository.saveAll(installments);
     }
+
+
+    @Transactional
+    public void createDailySchedule(
+            Loan loan,
+            LocalDate disbursementDate
+    ) {
+
+        if (loan == null || loan.getLoanId() == null) {
+            throw new IllegalArgumentException(
+                    "Saved loan is required"
+            );
+        }
+
+        if (!"DAILY_FIXED_TOTAL".equals(
+                loan.getRepaymentPlanType())) {
+            throw new IllegalArgumentException(
+                    "Daily repayment plan is required"
+            );
+        }
+
+        if (installmentRepository.existsByLoanLoanId(
+                loan.getLoanId())) {
+            throw new IllegalStateException(
+                    "Loan already has an installment schedule"
+            );
+        }
+
+        BigDecimal principal = loan.getApprovedAmount();
+        BigDecimal total = loan.getTotalRepaymentAmount();
+        Integer days = loan.getRepaymentDays();
+
+        if (principal == null || total == null ||
+                days == null) {
+            throw new IllegalArgumentException(
+                    "Daily repayment details are required"
+            );
+        }
+
+        DailyRepaymentScheduleCalculator calculator =
+                new DailyRepaymentScheduleCalculator();
+
+        var schedule = calculator.createSchedule(
+                principal,
+                total,
+                days,
+                disbursementDate
+        );
+
+        List<LoanInstallment> installments =
+                new ArrayList<>();
+
+        BigDecimal cumulativeTotal = BigDecimal.ZERO;
+        BigDecimal cumulativePrincipal = BigDecimal.ZERO;
+
+        for (var daily : schedule) {
+
+            BigDecimal dailyTotal = daily.amountDue();
+
+            cumulativeTotal =
+                    cumulativeTotal.add(dailyTotal);
+
+            // Calculate the principal portion proportionally.
+            BigDecimal principalTarget = cumulativeTotal
+                    .multiply(principal)
+                    .divide(total, 2, RoundingMode.DOWN);
+
+            BigDecimal principalDue =
+                    principalTarget.subtract(cumulativePrincipal);
+
+            BigDecimal interestDue =
+                    dailyTotal.subtract(principalDue);
+
+            LoanInstallment installment =
+                    new LoanInstallment();
+
+            installment.setLoan(loan);
+            installment.setInstallmentNumber(
+                    daily.installmentNumber()
+            );
+            installment.setDueDate(daily.dueDate());
+
+            installment.setPrincipalDue(principalDue);
+            installment.setInterestDue(interestDue);
+            installment.setPaidAmount(BigDecimal.ZERO);
+
+            installments.add(installment);
+
+            cumulativePrincipal = principalTarget;
+        }
+
+        installmentRepository.saveAll(installments);
+    }
+
 }

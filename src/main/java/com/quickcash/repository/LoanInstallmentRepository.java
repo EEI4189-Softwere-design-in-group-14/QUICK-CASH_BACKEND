@@ -29,7 +29,8 @@ public interface LoanInstallmentRepository
         JOIN FETCH l.borrower b
         JOIN FETCH b.user u
         WHERE i.dueDate BETWEEN :startDate AND :endDate
-          AND i.paidAmount < i.principalDue
+         AND i.paidAmount <
+                         (i.principalDue + COALESCE(i.interestDue, 0))
           AND l.status = :status
         ORDER BY i.dueDate ASC
         """)
@@ -47,7 +48,8 @@ public interface LoanInstallmentRepository
         JOIN FETCH l.borrower b
         JOIN FETCH b.user u
         WHERE i.dueDate < :today
-          AND i.paidAmount < i.principalDue
+          AND i.paidAmount <
+                           (i.principalDue + COALESCE(i.interestDue, 0))
           AND l.status = :status
         ORDER BY i.dueDate ASC
         """)
@@ -85,7 +87,8 @@ public interface LoanInstallmentRepository
     LEFT JOIN FETCH l.assignedCollector c
     WHERE l.status = :status
       AND i.dueDate < :asOfDate
-      AND i.paidAmount < i.principalDue
+      AND i.paidAmount <
+                        (i.principalDue + COALESCE(i.interestDue, 0))
     ORDER BY i.dueDate ASC, i.installmentNumber ASC
     """)
     List<LoanInstallment> findManagerOverdueInstallments(
