@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import jakarta.persistence.Transient;
 
 @Entity
 @Table(
@@ -42,6 +43,16 @@ public class LoanInstallment {
             scale = 2
     )
     private BigDecimal principalDue;
+
+    // Interest portion of the installment
+    @Column(
+            name = "interest_due",
+            nullable = false,
+            precision = 15,
+            scale = 2
+    )
+    private BigDecimal interestDue = BigDecimal.ZERO;
+
 
     @Column(
             name = "paid_amount",
@@ -94,4 +105,33 @@ public class LoanInstallment {
     public void setPaidAmount(BigDecimal paidAmount) {
         this.paidAmount = paidAmount;
     }
+
+
+    public BigDecimal getInterestDue() {
+        return interestDue;
+    }
+
+    public void setInterestDue(BigDecimal interestDue) {
+        this.interestDue = interestDue;
+    }
+
+
+    // Total installment = Principal + Interest
+    @Transient
+    public BigDecimal getTotalDue() {
+
+        if (principalDue == null) {
+            throw new IllegalStateException(
+                    "Installment principal is missing"
+            );
+        }
+
+        BigDecimal interest =
+                interestDue == null
+                        ? BigDecimal.ZERO
+                        : interestDue;
+
+        return principalDue.add(interest);
+    }
+
 }

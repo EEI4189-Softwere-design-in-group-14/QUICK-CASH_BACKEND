@@ -22,6 +22,8 @@ public record ManagerOverdueInstallmentResponse(
         long daysOverdue,
         String agingBucket,
         BigDecimal principalDue,
+        BigDecimal interestDue,
+        BigDecimal totalDue,
         BigDecimal paidAmount,
         BigDecimal remainingAmount
 ) {
@@ -37,9 +39,17 @@ public record ManagerOverdueInstallmentResponse(
                 ? BigDecimal.ZERO
                 : installment.getPaidAmount();
 
-        BigDecimal remaining = installment.getPrincipalDue()
-                .subtract(paid)
-                .max(BigDecimal.ZERO);
+        BigDecimal interestDue =
+                installment.getInterestDue() == null
+                        ? BigDecimal.ZERO
+                        : installment.getInterestDue();
+
+        BigDecimal totalDue =
+                installment.getTotalDue();
+
+        BigDecimal remaining =
+                totalDue.subtract(paid)
+                        .max(BigDecimal.ZERO);
 
         long days = ChronoUnit.DAYS.between(
                 installment.getDueDate(),
@@ -69,6 +79,8 @@ public record ManagerOverdueInstallmentResponse(
                 days,
                 bucket,
                 installment.getPrincipalDue(),
+                interestDue,
+                totalDue,
                 paid,
                 remaining
         );

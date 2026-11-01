@@ -268,7 +268,76 @@ public class LoanService {
         }
 
         loan.setApprovedAmount(approvedAmount);
-        loan.setInterestRate(request.getInterestRate());
+
+        String planType = request.getRepaymentPlanType();
+
+        if (planType == null || planType.isBlank()) {
+            planType = "MONTHLY_PRINCIPAL_ONLY";
+        }
+
+        if ("DAILY_FIXED_TOTAL".equals(planType)) {
+
+            if (request.getTotalRepaymentAmount() == null
+                    || request.getRepaymentDays() == null) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Total repayment amount and repayment days are required"
+                );
+            }
+
+            LoanRepaymentCalculator.LoanCalculation calculation;
+
+            try {
+                LoanRepaymentCalculator calculator =
+                        new LoanRepaymentCalculator();
+
+                calculation = calculator.calculate(
+                        approvedAmount,
+                        request.getTotalRepaymentAmount(),
+                        request.getRepaymentDays()
+                );
+
+            } catch (IllegalArgumentException | ArithmeticException e) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        e.getMessage()
+                );
+            }
+
+            loan.setRepaymentPlanType("DAILY_FIXED_TOTAL");
+
+            loan.setTotalRepaymentAmount(
+                    request.getTotalRepaymentAmount().setScale(2)
+            );
+
+            loan.setRepaymentDays(request.getRepaymentDays());
+
+            loan.setInterestAmount(calculation.interestAmount());
+
+            loan.setInterestRate(calculation.interestPercentage());
+
+        } else if ("MONTHLY_PRINCIPAL_ONLY".equals(planType)) {
+
+            if (request.getInterestRate() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Interest rate is required for monthly loans"
+                );
+            }
+
+            loan.setRepaymentPlanType("MONTHLY_PRINCIPAL_ONLY");
+            loan.setInterestRate(request.getInterestRate());
+
+        } else {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Unsupported repayment plan type"
+            );
+        }
+
         loan.setStatus(LoanStatus.APPROVED);
         loan.setReviewedAt(LocalDateTime.now());
         loan.setReviewedBy(manager);

@@ -15,6 +15,8 @@ public record CollectorDueInstallmentResponse(
         Integer installmentNumber,
         LocalDate dueDate,
         BigDecimal principalDue,
+        BigDecimal interestDue,
+        BigDecimal totalDue,
         BigDecimal paidAmount,
         BigDecimal remainingAmount,
         String dueStatus
@@ -25,20 +27,33 @@ public record CollectorDueInstallmentResponse(
             LocalDate asOfDate
     ) {
 
-        BigDecimal paid = installment.getPaidAmount() == null
-                ? BigDecimal.ZERO
-                : installment.getPaidAmount();
+        // Step 1: Get paid amount
+        BigDecimal paid =
+                installment.getPaidAmount() == null
+                        ? BigDecimal.ZERO
+                        : installment.getPaidAmount();
 
-        BigDecimal remaining = installment
-                .getPrincipalDue()
-                .subtract(paid)
-                .max(BigDecimal.ZERO);
+        // Step 2: Get interest amount
+        BigDecimal interest =
+                installment.getInterestDue() == null
+                        ? BigDecimal.ZERO
+                        : installment.getInterestDue();
 
-        String dueStatus = installment.getDueDate()
-                .isBefore(asOfDate)
-                ? "OVERDUE"
-                : "DUE_ON_DATE";
+        // Step 3: Calculate total installment
+        BigDecimal totalDue = installment.getTotalDue();
 
+        // Step 4: Calculate remaining amount
+        BigDecimal remaining =
+                totalDue.subtract(paid)
+                        .max(BigDecimal.ZERO);
+
+        // Step 5: Check installment status
+        String dueStatus =
+                installment.getDueDate().isBefore(asOfDate)
+                        ? "OVERDUE"
+                        : "DUE_ON_DATE";
+
+        // Step 6: Return response
         return new CollectorDueInstallmentResponse(
                 installment.getInstallmentId(),
                 installment.getLoan().getLoanId(),
@@ -50,10 +65,11 @@ public record CollectorDueInstallmentResponse(
                 installment.getInstallmentNumber(),
                 installment.getDueDate(),
                 installment.getPrincipalDue(),
+                interest,
+                totalDue,
                 paid,
                 remaining,
                 dueStatus
         );
     }
 }
-
