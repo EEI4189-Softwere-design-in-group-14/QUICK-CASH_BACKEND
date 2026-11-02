@@ -49,10 +49,11 @@ public class SmsOutboxService {
                 .getUser()
                 .getPhone();
 
+
         if (borrowerPhone == null || borrowerPhone.isBlank()) {
-            throw new IllegalStateException(
-                    "Borrower phone number is missing"
-            );
+            // Skip SMS when borrower has no phone number.
+            // A missing phone number must not cancel a payment.
+            return;
         }
 
         // Build SMS using the saved payment details.
