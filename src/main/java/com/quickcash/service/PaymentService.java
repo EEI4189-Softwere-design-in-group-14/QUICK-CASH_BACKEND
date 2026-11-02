@@ -31,6 +31,7 @@ public class PaymentService {
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final InstallmentAllocationService installmentAllocationService;
+    private final SmsOutboxService smsOutboxService;
 
     public PaymentService(
             PaymentRepository paymentRepository,
@@ -39,7 +40,8 @@ public class PaymentService {
             ReceiptService receiptService,
             AuditService auditService,
             NotificationService notificationService,
-            InstallmentAllocationService installmentAllocationService
+            InstallmentAllocationService installmentAllocationService,
+            SmsOutboxService smsOutboxService
     ) {
         this.paymentRepository = paymentRepository;
         this.loanRepository = loanRepository;
@@ -48,6 +50,7 @@ public class PaymentService {
         this.auditService = auditService;
         this.notificationService = notificationService;
         this.installmentAllocationService = installmentAllocationService;
+        this.smsOutboxService = smsOutboxService;
     }
 
     // ==========================================
@@ -252,7 +255,14 @@ public class PaymentService {
                         + loan.getOutstandingBalance()
         );
 
-        return new PaymentResponse(savedPayment);
+
+                // Step 15: Queue SMS for the borrower.
+                // It will be sent later by the SMS dispatcher.
+                // Do not call the SMS gateway inside this transaction.
+                   smsOutboxService.queuePaymentSms(savedPayment);
+
+                   return new PaymentResponse(savedPayment);
+
     }
 
     // ==========================================

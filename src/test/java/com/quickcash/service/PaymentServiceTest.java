@@ -47,11 +47,16 @@ class PaymentServiceTest {
     @Mock
     private NotificationService notificationService;
 
+
     @Mock
     private InstallmentAllocationService installmentAllocationService;
 
+    @Mock
+    private SmsOutboxService smsOutboxService;
+
     @InjectMocks
     private PaymentService service;
+
 
     private User collector(
             Long id,
@@ -191,6 +196,10 @@ class PaymentServiceTest {
                 auditService,
                 notificationService
         );
+
+
+        verifyNoInteractions(smsOutboxService);
+
     }
 
     // TEST 2: Same ID with another amount must be rejected.
@@ -355,6 +364,10 @@ class PaymentServiceTest {
                         anyString(),
                         anyString()
                 );
+
+        verify(smsOutboxService, times(1))
+                .queuePaymentSms(any(Payment.class));
+
     }
 
     // TEST 8: The payment method must use READ_COMMITTED.
