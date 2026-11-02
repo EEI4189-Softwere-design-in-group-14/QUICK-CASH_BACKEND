@@ -58,6 +58,11 @@ public class SmsNotification {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+
+    @Column(name = "processing_started_at")
+    private LocalDateTime processingStartedAt;
+
+
     private LocalDateTime sentAt;
 
     @PrePersist
@@ -131,4 +136,16 @@ public class SmsNotification {
     public void setSentAt(LocalDateTime sentAt) {
         this.sentAt = sentAt;
     }
+
+
+    public LocalDateTime getProcessingStartedAt() {
+        return processingStartedAt;
+    }
+
+    public void setProcessingStartedAt(
+            LocalDateTime processingStartedAt
+    ) {
+        this.processingStartedAt = processingStartedAt;
+    }
+
 }

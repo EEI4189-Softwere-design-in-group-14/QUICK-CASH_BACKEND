@@ -32,20 +32,24 @@ public interface SmsNotificationRepository
     );
 
     // Atomically claim one SMS for processing.
+
     @Modifying
     @Transactional
     @Query("""
-            UPDATE SmsNotification s
-            SET s.status = :processing,
-                s.attemptCount = s.attemptCount + 1
-            WHERE s.smsId = :smsId
-              AND s.status = :pending
-            """)
+        UPDATE SmsNotification s
+        SET s.status = :processing,
+            s.attemptCount = s.attemptCount + 1,
+            s.processingStartedAt = :startedAt
+        WHERE s.smsId = :smsId
+          AND s.status = :pending
+        """)
     int claimSms(
             @Param("smsId") Long smsId,
             @Param("pending") SmsNotificationStatus pending,
-            @Param("processing") SmsNotificationStatus processing
+            @Param("processing") SmsNotificationStatus processing,
+            @Param("startedAt") LocalDateTime startedAt
     );
+
 
     // Mark gateway-accepted SMS as sent.
     @Modifying
@@ -81,4 +85,22 @@ public interface SmsNotificationRepository
             @Param("failed") SmsNotificationStatus failed,
             @Param("errorMessage") String errorMessage
     );
+
+
+    @Modifying
+    @Transactional
+    @Query("""
+        UPDATE SmsNotification s
+        SET s.status = :failed,
+            s.lastError = 'Processing timed out; delivery unknown; manual review required'
+        WHERE s.status = :processing
+          AND s.processingStartedAt IS NOT NULL
+          AND s.processingStartedAt < :cutoff
+        """)
+    int markStuckProcessingForReview(
+            @Param("processing") SmsNotificationStatus processing,
+            @Param("failed") SmsNotificationStatus failed,
+            @Param("cutoff") LocalDateTime cutoff
+    );
+
 }

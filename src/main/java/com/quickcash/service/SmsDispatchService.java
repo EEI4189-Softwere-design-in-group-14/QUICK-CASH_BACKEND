@@ -52,11 +52,14 @@ public class SmsDispatchService {
             Long smsId = sms.getSmsId();
 
             // Only one worker can claim this SMS.
+
             int claimed = smsRepository.claimSms(
                     smsId,
                     SmsNotificationStatus.PENDING,
-                    SmsNotificationStatus.PROCESSING
+                    SmsNotificationStatus.PROCESSING,
+                    LocalDateTime.now()
             );
+
 
             if (claimed != 1) {
                 continue;
@@ -118,4 +121,33 @@ public class SmsDispatchService {
             }
         }
     }
+
+
+    @Scheduled(
+            fixedDelayString =
+                    "${quickcash.sms.recovery-poll-ms:60000}",
+            initialDelayString =
+                    "${quickcash.sms.recovery-initial-ms:60000}"
+    )
+    public void recoverStuckSms() {
+
+        LocalDateTime cutoff =
+                LocalDateTime.now().minusMinutes(30);
+
+        int recovered =
+                smsRepository.markStuckProcessingForReview(
+                        SmsNotificationStatus.PROCESSING,
+                        SmsNotificationStatus.FAILED,
+                        cutoff
+                );
+
+        if (recovered > 0) {
+            log.warn(
+                    "{} stuck SMS messages flagged for manual review. " +
+                            "Delivery outcome unknown. No automatic resend.",
+                    recovered
+            );
+        }
+    }
+
 }

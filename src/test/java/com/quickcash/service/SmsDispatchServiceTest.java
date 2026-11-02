@@ -61,10 +61,12 @@ class SmsDispatchServiceTest {
                 ))
                 .thenReturn(List.of(sms));
 
+
         when(smsRepository.claimSms(
-                101L,
-                SmsNotificationStatus.PENDING,
-                SmsNotificationStatus.PROCESSING
+                eq(101L),
+                eq(SmsNotificationStatus.PENDING),
+                eq(SmsNotificationStatus.PROCESSING),
+                any(LocalDateTime.class)
         )).thenReturn(1);
 
         when(smsRepository.findById(101L))
@@ -106,11 +108,15 @@ class SmsDispatchServiceTest {
                 ))
                 .thenReturn(List.of(sms));
 
+
+
         when(smsRepository.claimSms(
-                101L,
-                SmsNotificationStatus.PENDING,
-                SmsNotificationStatus.PROCESSING
+                eq(101L),
+                eq(SmsNotificationStatus.PENDING),
+                eq(SmsNotificationStatus.PROCESSING),
+                any(LocalDateTime.class)
         )).thenReturn(0);
+
 
         smsDispatchService.processPendingSms();
 
@@ -137,11 +143,17 @@ class SmsDispatchServiceTest {
                 ))
                 .thenReturn(List.of(sms));
 
+
+
+
         when(smsRepository.claimSms(
-                101L,
-                SmsNotificationStatus.PENDING,
-                SmsNotificationStatus.PROCESSING
+                eq(101L),
+                eq(SmsNotificationStatus.PENDING),
+                eq(SmsNotificationStatus.PROCESSING),
+                any(LocalDateTime.class)
         )).thenReturn(1);
+
+
 
         when(smsRepository.findById(101L))
                 .thenReturn(Optional.of(sms));
@@ -171,4 +183,28 @@ class SmsDispatchServiceTest {
                         any(LocalDateTime.class)
                 );
     }
+
+
+    @Test
+    void stuckSmsIsFlaggedWithoutResending() {
+
+        when(smsRepository.markStuckProcessingForReview(
+                eq(SmsNotificationStatus.PROCESSING),
+                eq(SmsNotificationStatus.FAILED),
+                any(LocalDateTime.class)
+        )).thenReturn(2);
+
+        smsDispatchService.recoverStuckSms();
+
+        verify(smsRepository, times(1))
+                .markStuckProcessingForReview(
+                        eq(SmsNotificationStatus.PROCESSING),
+                        eq(SmsNotificationStatus.FAILED),
+                        any(LocalDateTime.class)
+                );
+
+        // Never send SMS again automatically.
+        verifyNoInteractions(smsGateway);
+    }
+
 }
