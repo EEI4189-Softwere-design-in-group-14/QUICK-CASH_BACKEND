@@ -69,7 +69,7 @@ public interface LoanInstallmentRepository
     WHERE c.userId = :collectorId
       AND l.status = :status
       AND i.dueDate <= :asOfDate
-      AND i.paidAmount < i.principalDue
+      AND i.paidAmount < (i.principalDue + COALESCE(i.interestDue, 0))
     ORDER BY i.dueDate ASC, i.installmentNumber ASC
     """)
     List<LoanInstallment> findDueForCollector(
