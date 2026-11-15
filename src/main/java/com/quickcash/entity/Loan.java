@@ -51,6 +51,12 @@ public class Loan {
     @JoinColumn(name = "reviewed_by")
     private User reviewedBy;
 
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_collector_id")
+    private User assignedCollector;
+
+
     @Column(length = 500)
     private String rejectionReason;
 
@@ -169,4 +175,14 @@ public class Loan {
     public void setRejectionReason(String rejectionReason) {
         this.rejectionReason = rejectionReason;
     }
+
+
+    public User getAssignedCollector() {
+        return assignedCollector;
+    }
+
+    public void setAssignedCollector(User assignedCollector) {
+        this.assignedCollector = assignedCollector;
+    }
+
 }

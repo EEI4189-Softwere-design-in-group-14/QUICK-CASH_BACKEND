@@ -13,13 +13,13 @@ import com.quickcash.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import com.quickcash.entity.NotificationType;
 
 @Service
 public class PaymentService {
@@ -50,77 +50,131 @@ public class PaymentService {
         this.installmentAllocationService = installmentAllocationService;
     }
 
-    @Transactional
+    // ==========================================
+    // 1. RECORD ONLINE OR OFFLINE PAYMENT
+    // ==========================================
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PaymentResponse recordPayment(
             String collectorEmail,
             PaymentRequest request,
             PaymentSource source
     ) {
 
-        // Prevent duplicate online or offline transactions.
-        var existing = paymentRepository.findByClientTransactionId(
-                request.getClientTransactionId().trim()
+        // Step 1: Verify the collector account.
+        User collector = requireActiveCollector(collectorEmail);
+
+        // Step 2: Verify loan assignment.
+        Loan loan = requireAssignedLoanForPayment(
+                request.getLoanId(),
+                collector
         );
 
-        if (existing.isPresent()) {
-            receiptService.createReceiptIfMissing(existing.get());
+        // Step 3: Validate client transaction ID.
+        if (request.getClientTransactionId() == null
+                || request.getClientTransactionId().isBlank()) {
 
-            return new PaymentResponse(existing.get());
-        }
-
-        // Find the collector.
-        User collector = userRepository.findByEmail(collectorEmail)
-                .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "Collector not found"
-                        )
-                );
-
-        if (collector.getRole() != Role.COLLECTOR) {
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Only field collectors can record payments"
+                    HttpStatus.BAD_REQUEST,
+                    "Client transaction ID is required"
             );
         }
 
-        // Find the loan.
-        Loan loan = loanRepository.findById(request.getLoanId())
-                .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "Loan not found"
-                        )
-                );
+        String transactionId =
+                request.getClientTransactionId().trim();
 
+        // Step 4: Validate payment amount.
+        BigDecimal paymentAmount = request.getAmount();
+
+        if (paymentAmount == null
+                || paymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Payment amount must be greater than zero"
+            );
+        }
+
+        // Step 5: Secure duplicate transaction check.
+        var existing = paymentRepository
+                .findByClientTransactionId(transactionId);
+
+        if (existing.isPresent()) {
+
+            Payment previousPayment = existing.get();
+
+            boolean sameLoan =
+                    previousPayment.getLoan()
+                            .getLoanId()
+                            .equals(loan.getLoanId());
+
+            boolean sameCollector =
+                    previousPayment.getCollector()
+                            .getUserId()
+                            .equals(collector.getUserId());
+
+            boolean sameAmount =
+                    previousPayment.getAmount()
+                            .compareTo(paymentAmount) == 0;
+
+            boolean sameSource =
+                    previousPayment.getSource() == source;
+
+            // A transaction ID cannot be reused
+            // with different payment details.
+            if (!sameLoan
+                    || !sameCollector
+                    || !sameAmount
+                    || !sameSource) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Transaction ID already used with different payment details"
+                );
+            }
+
+            // Valid retry: return original payment.
+            // Do not deduct money again.
+            receiptService.createReceiptIfMissing(
+                    previousPayment
+            );
+
+            return new PaymentResponse(previousPayment);
+        }
+
+        // Step 6: Check loan status.
         if (loan.getStatus() != LoanStatus.ACTIVE) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Payments can only be recorded for active loans"
             );
         }
 
-        BigDecimal balanceBefore = loan.getOutstandingBalance();
+        // Step 7: Check outstanding balance.
+        BigDecimal balanceBefore =
+                loan.getOutstandingBalance();
 
         if (balanceBefore == null) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Loan outstanding balance is not initialized"
             );
         }
 
-        BigDecimal paymentAmount = request.getAmount();
-
         if (paymentAmount.compareTo(balanceBefore) > 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Payment amount cannot exceed outstanding balance"
             );
         }
 
-        BigDecimal balanceAfter = balanceBefore.subtract(paymentAmount);
+        BigDecimal balanceAfter =
+                balanceBefore.subtract(paymentAmount);
 
-        // Create the payment record.
+        // Step 8: Create payment record.
         Payment payment = new Payment();
 
         payment.setPaymentCode(
@@ -130,15 +184,14 @@ public class PaymentService {
                         .toUpperCase()
         );
 
-        payment.setClientTransactionId(
-                request.getClientTransactionId().trim()
-        );
-
+        payment.setClientTransactionId(transactionId);
         payment.setLoan(loan);
         payment.setCollector(collector);
+
         payment.setAmount(paymentAmount);
         payment.setBalanceBefore(balanceBefore);
         payment.setBalanceAfter(balanceAfter);
+
         payment.setSource(source);
         payment.setStatus(PaymentStatus.ACCEPTED);
 
@@ -148,7 +201,7 @@ public class PaymentService {
                         : LocalDateTime.now()
         );
 
-        // Update the outstanding loan balance.
+        // Step 9: Update loan balance.
         loan.setOutstandingBalance(balanceAfter);
 
         if (balanceAfter.compareTo(BigDecimal.ZERO) == 0) {
@@ -157,15 +210,17 @@ public class PaymentService {
 
         loanRepository.save(loan);
 
-        // Save the payment first to obtain its generated ID.
-        Payment savedPayment = paymentRepository.save(payment);
+        // Step 10: Save payment.
+        Payment savedPayment =
+                paymentRepository.save(payment);
 
+        // Step 11: Allocate payment to installments.
         installmentAllocationService.allocatePayment(
                 loan,
                 savedPayment.getAmount()
         );
 
-        // Record the payment in the audit trail.
+        // Step 12: Record audit log.
         auditService.record(
                 collector,
                 AuditAction.PAYMENT_RECORDED,
@@ -178,10 +233,12 @@ public class PaymentService {
                         + loan.getLoanCode()
         );
 
-        // Generate the receipt.
-        receiptService.createReceiptIfMissing(savedPayment);
+        // Step 13: Create receipt.
+        receiptService.createReceiptIfMissing(
+                savedPayment
+        );
 
-// Notify the borrower about the successful payment.
+        // Step 14: Notify borrower.
         notificationService.send(
                 loan.getBorrower().getUser(),
                 NotificationType.PAYMENT_RECEIVED,
@@ -198,8 +255,20 @@ public class PaymentService {
         return new PaymentResponse(savedPayment);
     }
 
+    // ==========================================
+    // 2. COLLECTOR PAYMENT HISTORY
+    // ==========================================
+
     @Transactional(readOnly = true)
-    public List<PaymentResponse> getLoanPayments(Long loanId) {
+    public List<PaymentResponse> getLoanPayments(
+            Long loanId,
+            String collectorEmail
+    ) {
+
+        User collector =
+                requireActiveCollector(collectorEmail);
+
+        requireAssignedLoan(loanId, collector);
 
         return paymentRepository
                 .findByLoanLoanIdOrderByPaymentDateDesc(loanId)
@@ -208,8 +277,14 @@ public class PaymentService {
                 .toList();
     }
 
+    // ==========================================
+    // 3. BORROWER PAYMENT HISTORY
+    // ==========================================
+
     @Transactional(readOnly = true)
-    public List<PaymentResponse> getMyPayments(String borrowerEmail) {
+    public List<PaymentResponse> getMyPayments(
+            String borrowerEmail
+    ) {
 
         return paymentRepository
                 .findByLoanBorrowerUserEmailOrderByPaymentDateDesc(
@@ -219,4 +294,95 @@ public class PaymentService {
                 .map(PaymentResponse::new)
                 .toList();
     }
+
+    // ==========================================
+    // 4. VALIDATE ACTIVE COLLECTOR
+    // ==========================================
+
+    private User requireActiveCollector(
+            String collectorEmail
+    ) {
+
+        User collector = userRepository
+                .findByEmail(collectorEmail)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.FORBIDDEN,
+                                "Active collector account required"
+                        )
+                );
+
+        if (collector.getRole() != Role.COLLECTOR
+                || collector.getStatus() != UserStatus.ACTIVE) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Active collector account required"
+            );
+        }
+
+        return collector;
+    }
+
+    // ==========================================
+    // 5. VALIDATE LOAN ASSIGNMENT
+    // ==========================================
+
+    private Loan requireAssignedLoan(
+            Long loanId,
+            User collector
+    ) {
+
+        Loan loan = loanRepository.findById(loanId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Assigned loan not found"
+                        )
+                );
+
+        if (loan.getAssignedCollector() == null
+                || !loan.getAssignedCollector()
+                .getUserId()
+                .equals(collector.getUserId())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Assigned loan not found"
+            );
+        }
+
+        return loan;
+    }
+
+
+    private Loan requireAssignedLoanForPayment(
+            Long loanId,
+            User collector
+    ) {
+
+        // Lock this loan during payment processing.
+        Loan loan = loanRepository.findByIdForUpdate(loanId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Assigned loan not found"
+                        )
+                );
+
+        // Verify the current collector assignment.
+        if (loan.getAssignedCollector() == null
+                || !loan.getAssignedCollector()
+                .getUserId()
+                .equals(collector.getUserId())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Assigned loan not found"
+            );
+        }
+
+        return loan;
+    }
+
 }

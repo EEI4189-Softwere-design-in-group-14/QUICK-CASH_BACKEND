@@ -78,15 +78,19 @@ public class CollectorPaymentController {
         );
     }
 
+
     @GetMapping("/loan/{loanId}")
-    public ResponseEntity<List<PaymentResponse>>
-    getLoanPayments(
-            @PathVariable Long loanId
+    public ResponseEntity<List<PaymentResponse>> getLoanPayments(
+            @PathVariable Long loanId,
+            Authentication authentication
     ) {
 
         return ResponseEntity.ok(
-                paymentService
-                        .getLoanPayments(loanId)
+                paymentService.getLoanPayments(
+                        loanId,
+                        authentication.getName()
+                )
         );
     }
+
 }
