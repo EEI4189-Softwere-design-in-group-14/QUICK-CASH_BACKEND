@@ -55,4 +55,25 @@ public interface LoanInstallmentRepository
             @Param("today") LocalDate today,
             @Param("status") LoanStatus status
     );
+
+
+    @Query("""
+    SELECT i
+    FROM LoanInstallment i
+    JOIN FETCH i.loan l
+    JOIN FETCH l.borrower b
+    JOIN FETCH b.user u
+    JOIN l.assignedCollector c
+    WHERE c.userId = :collectorId
+      AND l.status = :status
+      AND i.dueDate <= :asOfDate
+      AND i.paidAmount < i.principalDue
+    ORDER BY i.dueDate ASC, i.installmentNumber ASC
+    """)
+    List<LoanInstallment> findDueForCollector(
+            @Param("collectorId") Long collectorId,
+            @Param("status") LoanStatus status,
+            @Param("asOfDate") LocalDate asOfDate
+    );
+
 }
