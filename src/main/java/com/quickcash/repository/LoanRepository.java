@@ -59,4 +59,10 @@ public interface LoanRepository
             @Param("loanId") Long loanId
     );
 
+
+    long countByAssignedCollector_UserIdAndStatus(
+            Long collectorUserId,
+            LoanStatus status
+    );
+
 }
