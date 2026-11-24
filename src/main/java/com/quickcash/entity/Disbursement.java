@@ -30,6 +30,8 @@ public class Disbursement {
 
     @Column(nullable = false)
     private String otpHash;
+    @Column(nullable = false, columnDefinition = "INT DEFAULT 0")
+    private int otpAttempts = 0;
 
     @Column(nullable = false)
     private LocalDateTime otpExpiresAt;
@@ -131,5 +133,13 @@ public class Disbursement {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public int getOtpAttempts() {
+        return otpAttempts;
+    }
+
+    public void setOtpAttempts(int otpAttempts) {
+        this.otpAttempts = otpAttempts;
     }
 }
